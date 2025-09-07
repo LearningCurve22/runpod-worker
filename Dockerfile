@@ -1,36 +1,21 @@
-# CUDA 11.7 + Python 3.10, good for Torch 1.13.1 and building PyTorch3D.
-FROM nvidia/cuda:11.7.1-cudnn8-devel-ubuntu22.04
+FROM pytorch/pytorch:2.1.0-cuda11.8-cudnn8-runtime
 
-ENV DEBIAN_FRONTEND=noninteractive \
-    PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1
+# Install system deps
+RUN apt-get update && apt-get install -y git wget unzip libgl1-mesa-glx && rm -rf /var/lib/apt/lists/*
 
-# System deps (OpenCV, build tools, git)
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    python3.10 python3.10-distutils python3-pip \
-    git wget curl ca-certificates \
-    build-essential cmake ninja-build \
-    libgl1 libglib2.0-0 libsm6 libxext6 \
-    && rm -rf /var/lib/apt/lists/*
+WORKDIR /app
 
-# Workdir
-WORKDIR /workspace
-
-# Python deps
+# Copy your worker repo files (handler, configs, etc.)
 COPY requirements.txt ./
 RUN python3 -m pip install --upgrade pip \
  && python3 -m pip install -r requirements.txt \
  && python3 -m pip cache purge
 
-# Clone upstream repo at build time for stability
+# Clone upstream 3DMM repo as third_party
 RUN git clone https://github.com/ascust/3DMM-Fitting-Pytorch third_party/3DMM-Fitting-Pytorch
 
-# App code
-COPY app ./app
-COPY handler.py ./handler.py
+# Copy the rest of your worker (after requirements installed to avoid cache bust)
+COPY . /app
 
-# Put repo on PYTHONPATH
-ENV PYTHONPATH="/workspace/third_party/3DMM-Fitting-Pytorch:${PYTHONPATH}"
-
-# Default command: start RunPod serverless handler
-CMD ["python3", "-u", "/workspace/handler.py"]
+EXPOSE 8000
+CMD ["python", "-u", "handler.py"]
